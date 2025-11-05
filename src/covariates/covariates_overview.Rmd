@@ -1,0 +1,203 @@
+---
+title: "Covariate visualisation"
+output: 
+  html_document:
+    code_folding: hide  
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=F, warning = F)
+library(ggplot2)
+library(tidyverse)
+data_drive <- "K:/DemSci/projects/2023_Gaza_NowPop/data/"
+```
+
+# Building damage
+
+### Conflict ecology
+```{r}
+ecology <- read_csv(paste0(data_drive, 'conflict_ecology/gaza_conflictEcology.csv')) 
+
+ecology <- ecology |>
+  mutate(
+    ADM2_EN = factor(ADM2_EN, levels=c('North Gaza','Gaza', 'Deir Al-Balah','Khan Younis', 'Rafah')),
+    prop_damaged = damaged/(damaged+undamaged)) |> 
+  arrange(ADM2_EN, date) 
+
+ggplot(ecology |> 
+         select(-undamaged) |> 
+         pivot_longer(c(damaged, prop_damaged), names_to = 'metric'),
+       aes(x=date, y=value, color=ADM2_EN))+
+  geom_point()+
+  geom_path(size=1)+
+  theme_minimal()+
+  facet_wrap(.~metric, scales = 'free_y')+
+  labs(title = paste0('Building damages: ', length(unique(ecology$date)), ' days, from ', min(ecology$date), ' to ', max(ecology$date)), caption= 'Source: Conflict Ecology lab',  y='', x='')
+
+```
+
+### Unosat
+
+We have four CDA (Comprehensive Damage Assessment) dated from the 7 November, 26 November, 7 January, 29 February. 
+
+They consist of a snapshot of the damaged buildings with two classifications related to the severity of the damage (Destroyed, Severe Damage, Moderate damage, Impact Crater) and the status of the damage (New, Increase, No change).
+
+Because the Conflict Ecology has a finer time resolution we will for now not processed the UNOSAT datasets.
+
+
+# Airstrikes - Airwars
+```{r}
+airwars <- read_csv(paste0(data_drive, 'airwars/airwars_gaza.csv')) 
+
+airwars <- airwars |> 
+  select(date, ADM2_EN,killed_number ) |> 
+  filter(!is.na(ADM2_EN)&date> '2023-10-07') |> 
+  mutate(
+    ADM2_EN = factor(ADM2_EN, levels=c('North Gaza','Gaza', 'Deir Al-Balah','Khan Younis', 'Rafah')  ),
+    killed_number = ifelse(is.na(killed_number), 0, killed_number),
+    date = as.Date(date)
+  ) |> 
+  group_by(ADM2_EN,date) |> 
+  summarise(
+    killed_number = sum(killed_number)
+  ) |> 
+  ungroup() |> 
+  complete(ADM2_EN, date)|> 
+  arrange(ADM2_EN, date) |>
+  group_by(ADM2_EN) |> 
+  mutate(
+    killed_number = ifelse(is.na(killed_number), 0, killed_number),
+    killed_cumsum = cumsum(killed_number)
+  )
+
+ggplot(airwars, aes(x=date, y=killed_cumsum, color= ADM2_EN))+
+  geom_point()+
+  geom_path(size=1)+
+  theme_minimal()+
+  labs(title = paste0('Casualities from airstrikes: ', length(unique(airwars$date)), ' days, from ', min(airwars$date), ' to ', max(airwars$date)), caption = 'Source: Airwars', y='Cumulative sum', x='')
+
+```
+
+# Conflict - ACLED
+
+
+```{r}
+acled <- read_csv(paste0(data_drive, 'acled/2023-10-01-2024-05-12-Palestine.csv')) |> filter(admin1=='Gaza Strip'& event_type !='Protests')
+
+acled <-  acled |> 
+  filter(!is.na(admin2)) |> 
+  mutate(date=dmy(event_date),
+         ADM2_EN = admin2,
+         IDF= ifelse(grepl('Israel', actor1),T, F)) |> 
+  group_by(event_type,disorder_type,civilian_targeting,IDF,ADM2_EN,date) |> 
+  summarise(
+    n_conflict = n()
+  ) |> 
+  ungroup() |> 
+  complete(event_type,disorder_type,civilian_targeting,IDF,ADM2_EN,date)|> 
+  arrange(ADM2_EN, date) |>
+  group_by(event_type,disorder_type,civilian_targeting,IDF,ADM2_EN) |> 
+  mutate(
+    n_conflict = ifelse(is.na(n_conflict), 0, n_conflict),
+    conflict_cumsum = cumsum(n_conflict)
+  )
+
+acled <- acled |> 
+  mutate(
+    ADM2_EN = case_when(
+      ADM2_EN == 'Deir El Balah' ~ 'Deir Al-Balah',
+      ADM2_EN == 'Gaza City' ~ 'Gaza',
+      ADM2_EN == 'Khan Yunis' ~ 'Khan Younis',
+      T ~ ADM2_EN
+    )
+  )
+
+ggplot(acled |> 
+         group_by(ADM2_EN, date) |> 
+         summarise(conflict_cumsum=sum(conflict_cumsum)), aes(x=date, y=conflict_cumsum, color= ADM2_EN))+
+  geom_point()+
+  geom_path(size=1)+
+  theme_minimal()+
+  labs(title = paste0('Conflict: ', length(unique(acled$date)), ' days, from ', min(acled$date), ' to ', max(acled$date)), caption = 'Source: ACLED', y='Cumulative sum', x='')
+```
+
+```{r}
+ggplot(acled |> 
+         filter(event_type!='Riots') |> 
+         group_by(ADM2_EN, date, event_type) |> 
+         summarise(conflict_cumsum=sum(conflict_cumsum)), aes(x=date, y=conflict_cumsum, color= ADM2_EN))+
+  geom_point()+
+  geom_path(size=1)+
+  theme_minimal()+
+  labs(title = paste0('Conflict by type: ', length(unique(acled$date)), ' days, from ', min(acled$date), ' to ', max(acled$date)), caption = 'Source: ACLED', y='Cumulative sum', x='')+
+  facet_grid(.~event_type)
+```
+
+
+```{r}
+ggplot(acled |> 
+         group_by(ADM2_EN, date, civilian_targeting) |> 
+         summarise(conflict_cumsum=sum(conflict_cumsum)), aes(x=date, y=conflict_cumsum, color= ADM2_EN))+
+  geom_point()+
+  geom_path(size=1)+
+  theme_minimal()+
+  labs(title = paste0('Conflict targeting civilians: ', length(unique(acled$date)), ' days, from ', min(acled$date), ' to ', max(acled$date)), caption = 'Source: ACLED', y='Cumulative sum', x='')+
+  facet_grid(.~civilian_targeting)
+```
+
+```{r}
+ggplot(acled |> 
+         group_by(ADM2_EN, date, IDF) |> 
+         summarise(conflict_cumsum=sum(conflict_cumsum)), aes(x=date, y=conflict_cumsum, color= ADM2_EN))+
+  geom_point()+
+  geom_path(size=1)+
+  theme_minimal()+
+  labs(title = paste0('Conflict led by Israel: ', length(unique(acled$date)), ' days, from ', min(acled$date), ' to ', max(acled$date)), caption = 'Source: ACLED', y='Cumulative sum', x='')+
+  facet_grid(.~IDF)
+```
+
+
+# Infrastructure
+
+
+
+```{r}
+netblock <- read_csv(paste0(data_drive, 'NetBlock/netblock_gaza.csv')) 
+
+netblock = netblock |> 
+  mutate(
+    date = dmy(date),
+    ADM2_EN = gsub(' Governorate', '', location)
+  ) |> 
+  filter(!is.na(ADM2_EN)) |> 
+  group_by(ADM2_EN, date) |> 
+  summarise(
+    network_connectivity = max(network_connectivity)
+  ) |> 
+  arrange(ADM2_EN, date)
+
+ggplot(netblock, aes(x=date, y=network_connectivity, color= ADM2_EN))+
+  geom_point()+
+  geom_path(size=1)+
+  theme_minimal()+
+  labs(title = paste0('Network connectivity: ', length(unique(acled$date)), ' days, from ', min(acled$date), ' to ', max(acled$date)), caption = 'Source: NetBlock', x='')
+```
+```{r}
+#Write covariates
+
+env <- new.env()
+source('../../.env', local=env)
+
+covariates_names <-  c('acled', 'airwars', 'ecology')
+
+for (name in covariates_names) {
+  write_csv(eval(parse(text=name)), 
+            paste0(env$wd, '/out/gaza/covariates/', 
+                   name, '.csv'))
+} 
+
+
+```
+
