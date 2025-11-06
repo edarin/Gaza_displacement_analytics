@@ -86,9 +86,6 @@ pop_disp <- pop_countries |>
     disp = pop - pop_baseline
   ) |>
   filter(disp >= 0) |>
-  mutate(
-    disp = abs(disp)
-  ) |>
   group_by(country, day, collection_date) |>
   summarise(
     disp = sum(disp, na.rm = T)

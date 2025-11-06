@@ -15,9 +15,9 @@ source(here::here('.env'), local = env)
 
 #---- options ----#
 country <- 'gaza'
-with_death_migration <- T
-scenario_name <- 'base'
-
+scenario_name <- 'missing_K_200' # options: 'base', 'constant_national', 'missing_Ng&G_200', 'missing_R_200'
+show_check <- F
+print(scenario_name)
 # paths
 outdir <- file.path(env$wd, 'out', country)
 dir.create(file.path(outdir, 'population'), showWarnings = F, recursive = T)
@@ -29,7 +29,7 @@ baseline_pop <- read.csv(file.path(
   'gaza_base_pop_long.csv'
 ))
 
-if (with_death_migration) {
+if (scenario_name != 'constant_national') {
   deaths_migration <- read.csv(file.path(
     outdir,
     'baseline_population',
@@ -49,7 +49,7 @@ if (with_death_migration) {
     mutate(
       pop_nat = pop_nat + net_change
     ) |>
-    select(-net_change)
+    select(collection_date, agesex, pop_nat)
 } else {
   pop_national <- baseline_pop |>
     filter(grepl('18Plus|20Plus', agesex)) |>
@@ -64,7 +64,7 @@ platform <- 'facebook'
 audience <- read.csv(file.path(
   outdir,
   'daily_audience',
-  paste0('daily_audience_', scenario_name, '.csv')
+  paste0('daily_audience.csv')
 )) |>
 
   # replace mau=1000 with mau=500
@@ -73,6 +73,47 @@ audience <- read.csv(file.path(
     mau_lower = ifelse(mau_lower == 1000, 500, mau_lower),
     mau_upper = ifelse(mau_upper == 1000, 500, mau_upper)
   )
+
+# add scenario
+
+if (scenario_name == 'missing_Ng&G_200') {
+  missing_factor <- 2
+  audience <- audience |>
+    mutate(
+      mau_lower = ifelse(
+        ADM2_EN %in%
+          c('North Gaza', 'Gaza') &
+          collection_date >= as.Date('2023-10-17'),
+        mau_lower * missing_factor,
+        mau_lower
+      ),
+    )
+}
+if (scenario_name == 'missing_R_200') {
+  missing_factor <- 2
+  audience <- audience |>
+    mutate(
+      mau_lower = ifelse(
+        ADM2_EN == 'Rafah' &
+          collection_date >= as.Date('2024-02-01'),
+        mau_lower * missing_factor,
+        mau_lower
+      ),
+    )
+}
+
+if (scenario_name == 'missing_K_200') {
+  missing_factor <- 2
+  audience <- audience |>
+    mutate(
+      mau_lower = ifelse(
+        ADM2_EN == 'Khan Younis' &
+          collection_date >= as.Date('2024-02-01'),
+        mau_lower * missing_factor,
+        mau_lower
+      ),
+    )
+}
 
 # create baseline penetration rate
 
@@ -102,8 +143,7 @@ population_adults <- audience |>
   ungroup() |>
   # join baseline population totals for Gaza by age-sex group
   left_join(
-    pop_national |>
-      select(collection_date, agesex, pop_nat)
+    pop_national
   ) |>
   # calculate population sizes
   mutate(
@@ -115,45 +155,56 @@ population_adults <- audience |>
 
 #---- check sums ----#
 
-# total population
-population_adults |>
-  group_by(collection_date) |>
-  mutate(
-    pop_mau_lower = sum(pop_mau_lower)
-  ) |>
-  select(collection_date, pop_mau_lower) |>
-  distinct() |>
-  left_join(
-    pop_national |>
-      group_by(collection_date) |>
-      summarise(pop_nat = sum(pop_nat))
-  ) |>
-  print(n = 100)
+if (show_check) {
+  # total population
+  population_adults |>
+    group_by(collection_date) |>
+    mutate(
+      pop_mau_lower = sum(pop_mau_lower)
+    ) |>
+    select(collection_date, pop_mau_lower) |>
+    distinct() |>
+    left_join(
+      pop_national |>
+        group_by(collection_date) |>
+        summarise(pop_nat = sum(pop_nat))
+    ) |>
+    print(n = 100)
 
-# by agesex
-population_adults |>
-  filter(collection_date %in% c('2023-10-13', '2023-10-15')) |>
-  group_by(collection_date, agesex) |>
-  mutate(
-    total_mau_lower = sum(pop_mau_lower)
-  ) |>
-  select(collection_date, agesex, total_mau_lower) |>
-  arrange(agesex, collection_date) |>
-  distinct() |>
-  left_join(
-    pop_national |>
-      group_by(collection_date, agesex) |>
-      summarise(pop_nat = sum(pop_nat))
-  ) |>
-  print(n = 100)
-
+  # by agesex
+  population_adults |>
+    filter(collection_date %in% c('2023-10-13', '2023-10-15')) |>
+    group_by(collection_date, agesex) |>
+    mutate(
+      total_mau_lower = sum(pop_mau_lower)
+    ) |>
+    select(collection_date, agesex, total_mau_lower) |>
+    arrange(agesex, collection_date) |>
+    distinct() |>
+    left_join(
+      pop_national |>
+        group_by(collection_date, agesex) |>
+        summarise(pop_nat = sum(pop_nat))
+    ) |>
+    print(n = 100)
+}
 
 #---- save to disk ----#
-write.csv(
-  population_adults,
-  file.path(
+if (scenario_name == 'base') {
+  filepath <- file.path(
     'data',
     paste0('population_', country, '_', scenario_name, '.csv')
-  ),
+  )
+} else {
+  filepath <- file.path(
+    'data',
+    'scenario',
+    paste0('population_', country, '_', scenario_name, '.csv')
+  )
+}
+
+write.csv(
+  population_adults,
+  file = filepath,
   row.names = F
 )
