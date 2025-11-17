@@ -15,7 +15,7 @@ source(here::here('.env'), local = env)
 
 #---- options ----#
 country <- 'gaza'
-scenario_name <- 'missing_K_200' # options: 'base', 'constant_national', 'missing_Ng&G_200', 'missing_R_200'
+scenario_name <- 'base' # options: 'base', 'constant_national', 'missing_Ng&G_200', 'missing_R_200', 'penRate_baseline'
 show_check <- F
 print(scenario_name)
 # paths
@@ -126,6 +126,13 @@ baseline_penrate <- audience |>
     baseline_penrate = mau_lower / pop
   ) |>
   select(ADM2_PCODE, agesex, baseline_penrate)
+
+if (scenario_name == 'base') {
+  baseline_penrate <- baseline_penrate |>
+    mutate(
+      baseline_penrate = 1
+    )
+}
 
 
 #---- calculate adult population sizes by age-sex and governorate ----#
