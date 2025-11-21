@@ -15,7 +15,7 @@ source(here::here('.env'), local = env)
 
 #---- options ----#
 country <- 'gaza'
-scenario_name <- 'base' # options: 'base', 'constant_national', 'missing_Ng&G_200', 'missing_R_200', 'penRate_baseline'
+scenario_name <- 'missing_K_200' # options: 'base', 'constant_national', 'missing_Ng&G_200', 'missing_R_200', 'penRate_baseline', 'missing_K_200'
 show_check <- F
 print(scenario_name)
 # paths
@@ -108,7 +108,8 @@ if (scenario_name == 'missing_K_200') {
     mutate(
       mau_lower = ifelse(
         ADM2_EN == 'Khan Younis' &
-          collection_date >= as.Date('2024-02-01'),
+          collection_date >= as.Date('2024-02-01') &
+          collection_date <= as.Date('2024-04-01'),
         mau_lower * missing_factor,
         mau_lower
       ),
@@ -127,7 +128,8 @@ baseline_penrate <- audience |>
   ) |>
   select(ADM2_PCODE, agesex, baseline_penrate)
 
-if (scenario_name == 'base') {
+if (scenario_name != 'penRate_baseline') {
+  print(scenario_name)
   baseline_penrate <- baseline_penrate |>
     mutate(
       baseline_penrate = 1

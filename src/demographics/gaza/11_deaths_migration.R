@@ -82,7 +82,8 @@ deaths <- all_dates |>
   arrange(agesex, date) |>
   group_by(agesex) |>
   mutate(
-    deaths = na.approx(deaths)
+    deaths = ifelse(is.na(deaths), 0, deaths),
+    deaths_cum = cumsum(deaths)
   )
 
 # prepare migration data
@@ -137,7 +138,7 @@ migration <- migration |>
   pivot_longer(
     cols = -date,
     names_to = 'agesex',
-    values_to = 'migration'
+    values_to = 'net_migration'
   )
 
 # interpolate missing dates
@@ -164,12 +165,13 @@ migration <- all_dates |>
   arrange(agesex, date) |>
   group_by(agesex) |>
   mutate(
-    migration = na.approx(migration)
+    net_migration = ifelse(is.na(net_migration), 0, net_migration),
+    net_migration = cumsum(net_migration)
   )
 
 
 ggplot() +
-  geom_line(data = migration, aes(x = date, y = migration, color = agesex))
+  geom_line(data = migration, aes(x = date, y = net_migration, color = agesex))
 
 #
 # combine deaths and migration
@@ -177,7 +179,7 @@ deaths_migration <- deaths |>
   filter(date <= max(migration$date)) |>
   left_join(migration, by = c('date', 'agesex')) |>
   mutate(
-    net_change = -(migration + deaths)
+    net_change = -(net_migration + deaths_cum)
   )
 
 # write to disk

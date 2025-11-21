@@ -93,7 +93,7 @@ phase_df <- pop_gaza |>
   group_by(phase, phase_date, ADM2_EN) |>
   summarise(collection_date = min(collection_date))
 
-# 1. Magnitude and speed  of displacement in Gaza ------------------------
+# 1. Magnitude and speed of displacement in Gaza ------------------------
 
 events <- tibble(
   date = c(
@@ -290,7 +290,7 @@ rec_unrwa$xmin[1] <- min(unrwa$collection_date)
 
 g_displacement <- ggplot(
   pop_gaza_displacement_T,
-  aes(x = collection_date, y = displacement, colour = "Estimated")
+  aes(x = collection_date, y = displacement, colour = "Estimated displacement")
 ) +
   geom_rect(
     data = rec_unrwa,
@@ -327,16 +327,27 @@ g_displacement <- ggplot(
   scale_color_manual(values = c("#8D8A00", "gold3", "#325B29", "gold1")) +
   scale_fill_manual(values = rec_unrwa$col) +
   scale_shape_manual(values = c(13)) +
-  labs(x = "", y = "Displaced adults", colour = "Data source", shape = "") +
+  labs(x = "", y = "Displaced adults", colour = "", shape = "") +
   theme(
     axis.text = element_text(size = 16),
     legend.text = element_text(size = 16), # change font size of legend text
     legend.title = element_text(size = 19),
-    axis.title.y = element_text(size = 19, margin = unit(c(0, 5, 0, 0), "mm"))
+    axis.title.y = element_text(size = 19, margin = unit(c(0, 5, 0, 0), "mm")),
+    legend.position = "bottom"
   ) +
   guides(
-    color = guide_legend(order = 1, override.aes = list(size = 5)),
-    shape = guide_legend(order = 2, override.aes = list(size = 6)),
+    color = guide_legend(
+      order = 1,
+      override.aes = list(size = 5),
+      nrow = 2,
+      byrow = TRUE
+    ),
+    shape = guide_legend(
+      order = 2,
+      override.aes = list(size = 6),
+      nrow = 2,
+      byrow = TRUE
+    ),
     fill = "none"
   )
 
@@ -345,7 +356,7 @@ g_displacement
 ggplot2::ggsave(
   plot = g_displacement,
   filename = "./docs/pic/compUNRWA.png",
-  width = 30,
+  width = 20,
   height = 20,
   units = "cm"
 )
